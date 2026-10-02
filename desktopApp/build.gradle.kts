@@ -22,6 +22,13 @@ compose.desktop {
     application {
         mainClass = "MainKt"
 
+        // Set JVM arguments to limit max heap (prevents native out-of-memory)
+        // and force OpenGL (fixes invisible UI/crashes with transparent windows on Windows)
+        jvmArgs(
+            "-Xmx512m",
+            "-Dskiko.renderApi=OPENGL"
+        )
+
         // ADD THIS BLOCK TO DISABLE PROGUARD
         buildTypes.release.proguard {
             isEnabled.set(false)
