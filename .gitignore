@@ -17,3 +17,9 @@ captures
 !*.xcworkspace/contents.xcworkspacedata
 **/xcshareddata/WorkspaceSettings.xcsettings
 node_modules/
+
+*.log
+hs_err_pid*
+replay_pid*
+*.zip
+inter_extracted/
