@@ -1,43 +1,47 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.example.widget
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Minimize
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.graphicsLayer
-
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.Canvas
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.roundToInt
+import java.awt.Toolkit
+import java.util.Locale
+import kotlinx.coroutines.delay
 
-// State model representing current emotional axes
 data class EmotionalState(
     val active: Float = 5.0f,
     val revenge: Float = 5.0f,
@@ -50,36 +54,82 @@ data class EmotionalState(
 )
 
 fun tiltRegime(active: Float): Pair<String, Color> = when (active) {
-    in 1.0f..3.9f -> "CALM" to Color(0xFF34D399)
-    in 4.0f..6.9f -> "ELEVATED" to Color(0xFFFBBF24)
-    else -> "HYPER" to Color(0xFFF87171)
+    in 1.0f..3.9f -> "CALM" to EmotionalThemeColors.Positive
+    in 4.0f..6.9f -> "ELEVATED" to EmotionalThemeColors.Warning
+    else -> "HYPER" to EmotionalThemeColors.Danger
 }
 
-// Brand colors — Trade Metrics desk terminal (restrained, institutional)
+@Composable
+fun rememberPrefersReducedMotion(): Boolean {
+    return remember {
+        try {
+            val toolkit = Toolkit.getDefaultToolkit()
+            val fade = toolkit.getDesktopProperty("win.anim.fade")
+            fade is Boolean && !fade
+        } catch (_: Throwable) {
+            false
+        }
+    }
+}
+
 object EmotionalThemeColors {
-    val Active   = Color(0xFF34D399)
-    val Revenge  = Color(0xFFF87171)
-    val Fomo     = Color(0xFFA78BFA)
-    val Mistake  = Color(0xFF38BDF8)
-    val Ego      = Color(0xFFFBBF24)
+    val Revenge = Color(0xFFF87171)
+    val Fomo = Color(0xFFA78BFA)
+    val Mistake = Color(0xFF38BDF8)
+    val Ego = Color(0xFFFBBF24)
 
-    val Primary      = Color(0xFF60A5FA)
-    val DarkBackdrop = Color(0xF20B1017)
-    val PanelFill    = Color(0xFF0D1117)
-    val GlassBorder  = Color(0x1AFFFFFF)
-    val GlassRimTop  = Color(0x22FFFFFF)
-    val GlassFill    = Color(0x0AFFFFFF)
-    val Hairline     = Color(0x14FFFFFF)
-    val Positive     = Color(0xFF34D399)
-    val Negative     = Color(0xFFF87171)
+    val Primary = Color(0xFF60A5FA)
+    val DarkBackdrop = Color(0xF20B0F19)
+    val PanelFill = Color(0xFF0D1117)
+    val GlassBorder = Color(0x1AFFFFFF)
+    val Hairline = Color(0x14FFFFFF)
+    val TextEyebrow = Color.White.copy(alpha = 0.58f)
+    val TextMuted = Color.White.copy(alpha = 0.52f)
+    val TextHint = Color.White.copy(alpha = 0.42f)
+
+    val Positive = Color(0xFF10B981)
+    val Warning = Color(0xFFF59E0B)
+    val Danger = Color(0xFFEF4444)
+
+    val PnlGain = Color(0xFF6EE7B7)
+    val PnlLoss = Color(0xFFFECACA)
+    val PnlFlat = Color(0xFF94A3B8)
 }
 
-// Mathematical State Engine Solver
+object EmotionalMetrics {
+    val RadiusShell = 10.dp
+    val RadiusCard = 8.dp
+    val RadiusControl = 6.dp
+    val TextFloor = 9.sp
+}
+
+data class DeskPnlDisplay(
+    val text: String,
+    val color: Color
+)
+
+fun formatDeskPnl(amount: Double, currencySymbol: String, zenMode: Boolean): DeskPnlDisplay {
+    if (zenMode) {
+        return DeskPnlDisplay("${currencySymbol} ***", EmotionalThemeColors.PnlFlat)
+    }
+    val color = when {
+        amount > 0.0 -> EmotionalThemeColors.PnlGain
+        amount < 0.0 -> EmotionalThemeColors.PnlLoss
+        else -> EmotionalThemeColors.PnlFlat
+    }
+    val sign = when {
+        amount > 0.0 -> "+"
+        amount < 0.0 -> "-"
+        else -> "\u2007"
+    }
+    val abs = String.format(Locale.US, "%,.2f", kotlin.math.abs(amount))
+    return DeskPnlDisplay("$sign$currencySymbol$abs", color)
+}
+
 object StateEngine {
-    
+
     private fun Float.roundTo1(): Float = kotlin.math.round(this * 10f) / 10f
-    
-    // Bottom-Up Logic: Updates a single sub-axis, forced Master state update
+
     fun updateSubAxis(
         currentState: EmotionalState,
         axisName: String,
@@ -91,7 +141,6 @@ object StateEngine {
         val m = if (axisName == "MISTAKE") clampedVal else currentState.mistake
         val e = if (axisName == "EGO") clampedVal else currentState.ego
 
-        // Master (Active) is forced to equal maximum of all subs (Bottom-Up)
         val maxSub = maxOf(r, maxOf(f, maxOf(m, e)))
         return currentState.copy(
             active = maxSub.roundTo1(),
@@ -102,23 +151,24 @@ object StateEngine {
         )
     }
 
-    fun updateConfidence(currentState: EmotionalState, newValue: Float) = currentState.copy(confidence = newValue.coerceIn(1.0f, 10.0f).roundTo1())
-    fun updateFocus(currentState: EmotionalState, newValue: Float) = currentState.copy(focus = newValue.coerceIn(1.0f, 10.0f).roundTo1())
-    fun updateProbability(currentState: EmotionalState, newValue: Float) = currentState.copy(probability = newValue.coerceIn(0.0f, 100.0f).roundTo1())
+    fun updateConfidence(currentState: EmotionalState, newValue: Float) =
+        currentState.copy(confidence = newValue.coerceIn(1.0f, 10.0f).roundTo1())
 
-    // Top-Down Logic: Updates master axis, scales sub-axes proportionally
+    fun updateFocus(currentState: EmotionalState, newValue: Float) =
+        currentState.copy(focus = newValue.coerceIn(1.0f, 10.0f).roundTo1())
+
+    fun updateProbability(currentState: EmotionalState, newValue: Float) =
+        currentState.copy(probability = newValue.coerceIn(0.0f, 100.0f).roundTo1())
+
     fun updateMasterAxis(
         currentState: EmotionalState,
         newMaster: Float
     ): EmotionalState {
         val masterClamped = newMaster.coerceIn(1.0f, 10.0f)
         val maxSub = maxOf(currentState.revenge, maxOf(currentState.fomo, maxOf(currentState.mistake, currentState.ego)))
-        
+
         return if (maxSub > 1.0f) {
-            // Formula specified: newSub = 1 + (NewMaster - 1) * ((CurrentSub - 1) / (MaxSub - 1))
             val ratio = (masterClamped - 1.0f) / (maxSub - 1.0f)
-            
-            // Do not prematurely round internal state; let the exact floats preserve perfect vector ratios
             val r = 1.0f + (currentState.revenge - 1.0f) * ratio
             val f = 1.0f + (currentState.fomo - 1.0f) * ratio
             val m = 1.0f + (currentState.mistake - 1.0f) * ratio
@@ -132,306 +182,12 @@ object StateEngine {
                 ego = e.coerceIn(1.0f, 10.0f).roundTo1()
             )
         } else {
-            // Guard: All subs are at 1.0f - scale with the Master directly (prevent 0/0 division)
             EmotionalState(
                 active = masterClamped.roundTo1(),
                 revenge = masterClamped.roundTo1(),
                 fomo = masterClamped.roundTo1(),
                 mistake = masterClamped.roundTo1(),
                 ego = masterClamped.roundTo1()
-            )
-        }
-    }
-}
-
-// Fluent Window Custom Horizontal Slider for Master Axis
-@Composable
-fun HorizontalEmotionalSlider(
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    activeColor: Color,
-    modifier: Modifier = Modifier
-) {
-    // FIX: Capture the latest state lambda so old slider values don't overwrite new ones
-    val currentOnValueChange by rememberUpdatedState(onValueChange)
-    val currentValue by rememberUpdatedState(value)
-
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(30.dp),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        val widthPx = constraints.maxWidth.toFloat()
-
-        // Custom background track drawing
-        val trackHeight = 6.dp
-        val density = LocalDensity.current
-        val trackHeightPx = with(density) { trackHeight.toPx() }
-        val radiusPx = trackHeightPx / 2f
-
-        val fillFraction = (value - 1.0f) / 9.0f
-
-        val thumbSize = 16.dp
-        val thumbSizePx = with(density) { thumbSize.toPx() }
-        val usableWidth = widthPx - thumbSizePx
-
-        val gestureModifier = Modifier
-            .fillMaxSize()
-            .pointerInput(widthPx) {
-                detectTapGestures { offset ->
-                    val adjustedX = (offset.x - (thumbSizePx / 2f)).coerceIn(0f, usableWidth)
-                    val frac = adjustedX / usableWidth
-                    val rawVal = 1.0f + frac * 9.0f
-                    val steppedVal = (rawVal * 10f).roundToInt() / 10f
-                    currentOnValueChange(steppedVal)
-                }
-            }
-            .pointerInput(widthPx) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    val adjustedX = (change.position.x - (thumbSizePx / 2f)).coerceIn(0f, usableWidth)
-                    val frac = adjustedX / usableWidth
-                    val rawVal = 1.0f + frac * 9.0f
-                    val steppedVal = (rawVal * 10f).roundToInt() / 10f
-                    currentOnValueChange(steppedVal)
-                }
-            }
-            // Premium Mouse Wheel Scroll Support
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val scrollDeltaY = event.changes.firstOrNull()?.scrollDelta?.y ?: 0f
-                        if (scrollDeltaY != 0f) {
-                            // Scroll up (negative delta) increases value, scroll down decreases
-                            val step = if (scrollDeltaY > 0) -0.1f else 0.1f // Smooth 0.1 precision steps
-                            val steppedVal = ((currentValue + step).coerceIn(1.0f, 10.0f) * 10f).roundToInt() / 10f
-                            currentOnValueChange(steppedVal)
-                            event.changes.forEach { it.consume() }
-                        }
-                    }
-                }
-            }
-
-        Box(
-            modifier = gestureModifier
-                .drawBehind {
-                    // Gray Track Background
-                    drawRoundRect(
-                        color = Color.White.copy(alpha = 0.12f),
-                        topLeft = Offset(0f, (size.height - trackHeightPx) / 2f),
-                        size = Size(size.width, trackHeightPx),
-                        cornerRadius = CornerRadius(radiusPx, radiusPx)
-                    )
-                    
-                    // Connected Active Fill with beautiful glowing gradient and aesthetic neon aura
-                    // Math Fix: Fill width perfectly tracks the center of the thumb, not the raw fraction
-                    val thumbCenterPx = (usableWidth * fillFraction) + (thumbSizePx / 2f)
-                    val fillWidth = thumbCenterPx
-
-                    if (fillWidth > 0f) {
-                        // Soft outer neon glow aura
-                        drawRoundRect(
-                            color = activeColor.copy(alpha = 0.15f),
-                            topLeft = Offset(0f, (size.height - trackHeightPx * 2.2f) / 2f),
-                            size = Size(fillWidth, trackHeightPx * 2.2f),
-                            cornerRadius = CornerRadius(radiusPx * 2.2f, radiusPx * 2.2f)
-                        )
-                        // Precise foreground slider path
-                        drawRoundRect(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(activeColor.copy(alpha = 0.6f), activeColor)
-                            ),
-                            topLeft = Offset(0f, (size.height - trackHeightPx) / 2f),
-                            size = Size(fillWidth, trackHeightPx),
-                            cornerRadius = CornerRadius(radiusPx, radiusPx)
-                        )
-                    }
-                    
-                    // Minor Tweak division lines (1 to 10)
-                    val stepOffset = size.width / 9f
-                    for (i in 0..9) {
-                        val tickX = i * stepOffset
-                        val tickRadius = if (i == 0 || i == 9) 3.5f else 2.5f
-                        val isHigh = value >= (1.0f + i)
-                        val maxLimitX = size.width - tickRadius
-                        val finalTickX = if (maxLimitX >= tickRadius) tickX.coerceIn(tickRadius, maxLimitX) else tickRadius
-                        drawCircle(
-                            color = if (isHigh) Color.White.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.35f),
-                            radius = tickRadius,
-                            center = Offset(finalTickX, size.height / 2f)
-                        )
-                    }
-                }
-        ) {
-            // Glowing slider thumb with dual-layer glassmorphic aura
-            val thumbOffset = usableWidth * fillFraction
-            val thumbDpOffset = with(density) { thumbOffset.toDp() }
-            
-            // Outer dynamic blooming halo
-            Box(
-                modifier = Modifier
-                    .offset(x = thumbDpOffset - 4.dp)
-                    .align(Alignment.CenterStart)
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(activeColor.copy(alpha = 0.25f))
-            )
-            // Precise central button
-            Box(
-                modifier = Modifier
-                    .offset(x = thumbDpOffset)
-                    .align(Alignment.CenterStart)
-                    .size(thumbSize)
-                    .clip(CircleShape)
-                    .background(Color.White)
-                    .border(3.dp, activeColor, CircleShape)
-            )
-        }
-    }
-}
-
-// Fluent Window Custom Vertical Slider for Sub-Axes
-@Composable
-fun VerticalEmotionalSlider(
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    activeColor: Color,
-    modifier: Modifier = Modifier
-) {
-    // FIX: Capture the latest state lambda so old slider values don't overwrite new ones
-    val currentOnValueChange by rememberUpdatedState(onValueChange)
-    val currentValue by rememberUpdatedState(value)
-
-    BoxWithConstraints(
-        modifier = modifier
-            .width(36.dp)
-            .fillMaxHeight(),
-        contentAlignment = Alignment.BottomCenter
-    ) {
-        val heightPx = constraints.maxHeight.toFloat()
-        val fillFraction = (value - 1.0f) / 9.0f
-        val density = LocalDensity.current
-        val trackWidth = 6.dp
-        val trackWidthPx = with(density) { trackWidth.toPx() }
-        val radiusPx = trackWidthPx / 2f
-
-        val thumbSize = 14.dp
-        val thumbSizePx = with(density) { thumbSize.toPx() }
-        val usableHeight = heightPx - thumbSizePx
-
-        val gestureModifier = Modifier
-            .fillMaxSize()
-            .pointerInput(heightPx) {
-                detectTapGestures { offset ->
-                    val adjustedY = (offset.y - (thumbSizePx / 2f)).coerceIn(0f, usableHeight)
-                    val frac = 1.0f - (adjustedY / usableHeight)
-                    val rawVal = 1.0f + frac * 9.0f
-                    val steppedVal = (rawVal * 10f).roundToInt() / 10f
-                    currentOnValueChange(steppedVal)
-                }
-            }
-            .pointerInput(heightPx) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    val adjustedY = (change.position.y - (thumbSizePx / 2f)).coerceIn(0f, usableHeight)
-                    val frac = 1.0f - (adjustedY / usableHeight)
-                    val rawVal = 1.0f + frac * 9.0f
-                    val steppedVal = (rawVal * 10f).roundToInt() / 10f
-                    currentOnValueChange(steppedVal)
-                }
-            }
-            // Premium Mouse Wheel Scroll Support
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val scrollDeltaY = event.changes.firstOrNull()?.scrollDelta?.y ?: 0f
-                        if (scrollDeltaY != 0f) {
-                            // Scroll up (negative delta) increases value, scroll down decreases
-                            val step = if (scrollDeltaY > 0) -0.1f else 0.1f // Smooth 0.1 precision steps
-                            val steppedVal = ((currentValue + step).coerceIn(1.0f, 10.0f) * 10f).roundToInt() / 10f
-                            currentOnValueChange(steppedVal)
-                            event.changes.forEach { it.consume() }
-                        }
-                    }
-                }
-            }
-
-        Box(
-            modifier = gestureModifier
-                .drawBehind {
-                    // Track path with enhanced contrast
-                    drawRoundRect(
-                        color = Color.White.copy(alpha = 0.12f),
-                        topLeft = Offset((size.width - trackWidthPx) / 2f, 0f),
-                        size = Size(trackWidthPx, size.height),
-                        cornerRadius = CornerRadius(radiusPx, radiusPx)
-                    )
-                    
-                    // Fill path with elegant neon aura
-                    // Math Fix: Fill height perfectly tracks the center of the thumb, preventing visual slipping
-                    val thumbCenterY = (usableHeight * (1.0f - fillFraction)) + (thumbSizePx / 2f)
-                    val fillHeight = size.height - thumbCenterY
-
-                    if (fillHeight > 0f) {
-                        // Soft outer vertical glow aura
-                        drawRoundRect(
-                            color = activeColor.copy(alpha = 0.15f),
-                            topLeft = Offset((size.width - trackWidthPx * 2.2f) / 2f, thumbCenterY),
-                            size = Size(trackWidthPx * 2.2f, fillHeight),
-                            cornerRadius = CornerRadius(radiusPx * 2.2f, radiusPx * 2.2f)
-                        )
-                        // Sharp inner core fill path
-                        drawRoundRect(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(activeColor, activeColor.copy(alpha = 0.5f))
-                            ),
-                            topLeft = Offset((size.width - trackWidthPx) / 2f, thumbCenterY),
-                            size = Size(trackWidthPx, fillHeight),
-                            cornerRadius = CornerRadius(radiusPx, radiusPx)
-                        )
-                    }
-                    
-                    // Step dividers
-                    val stepOffset = size.height / 9f
-                    for (i in 0..9) {
-                        val tickY = size.height - (i * stepOffset)
-                        val tickRadius = if (i == 0 || i == 9) 3.5f else 2.5f
-                        val isHigh = value >= (1.0f + i)
-                        val maxLimitY = size.height - tickRadius
-                        val finalTickY = if (maxLimitY >= tickRadius) tickY.coerceIn(tickRadius, maxLimitY) else tickRadius
-                        drawCircle(
-                            color = if (isHigh) Color.White.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.3f),
-                            radius = tickRadius,
-                            center = Offset(size.width / 2f, finalTickY)
-                        )
-                    }
-                }
-        ) {
-            // Slider vertical thumb circle with premium halo styling
-            val thumbOffset = usableHeight * (1.0f - fillFraction)
-            val thumbDpOffset = with(density) { thumbOffset.toDp() }
-            
-            // Outer dynamic blooming halo
-            Box(
-                modifier = Modifier
-                    .offset(y = thumbDpOffset - 4.dp)
-                    .align(Alignment.TopCenter)
-                    .size(22.dp)
-                    .clip(CircleShape)
-                    .background(activeColor.copy(alpha = 0.25f))
-            )
-            // Precise central button
-            Box(
-                modifier = Modifier
-                    .offset(y = thumbDpOffset)
-                    .align(Alignment.TopCenter)
-                    .size(thumbSize)
-                    .clip(CircleShape)
-                    .background(Color.White)
-                    .border(3.dp, activeColor, CircleShape)
             )
         }
     }
@@ -451,27 +207,25 @@ fun Windows11WidgetPanel(
     modifier: Modifier = Modifier
 ) {
     val (regimeLabel, regimeColor) = tiltRegime(state.active)
+    val reducedMotion = rememberPrefersReducedMotion()
+    val shell = EmotionalMetrics.RadiusShell
+    val sizeSpec = if (reducedMotion) {
+        tween(0)
+    } else {
+        spring<androidx.compose.ui.unit.IntSize>(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow)
+    }
+
     Card(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(shell),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         border = BorderStroke(1.dp, EmotionalThemeColors.GlassBorder),
         modifier = modifier
             .fillMaxWidth()
             .drawBehind {
-                val corner = CornerRadius(14.dp.toPx(), 14.dp.toPx())
+                val corner = CornerRadius(shell.toPx(), shell.toPx())
                 drawRoundRect(color = EmotionalThemeColors.DarkBackdrop, cornerRadius = corner)
-                drawRoundRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            EmotionalThemeColors.Primary.copy(alpha = 0.08f),
-                            Color.Transparent,
-                            regimeColor.copy(alpha = 0.06f)
-                        )
-                    ),
-                    cornerRadius = corner
-                )
             }
-            .animateContentSize(animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow))
+            .animateContentSize(animationSpec = sizeSpec)
     ) {
         Column(
             modifier = Modifier
@@ -488,9 +242,9 @@ fun Windows11WidgetPanel(
                     Box(
                         modifier = Modifier
                             .size(28.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF0F1923))
-                            .border(1.dp, Color(0xFF1E3A5F), RoundedCornerShape(6.dp)),
+                            .clip(RoundedCornerShape(EmotionalMetrics.RadiusControl))
+                            .background(EmotionalThemeColors.PanelFill)
+                            .border(1.dp, Color(0xFF1E3A5F), RoundedCornerShape(EmotionalMetrics.RadiusControl)),
                         contentAlignment = Alignment.Center
                     ) {
                         InstitutionalBrandMark(size = 16f, strokeColor = EmotionalThemeColors.Primary)
@@ -500,7 +254,7 @@ fun Windows11WidgetPanel(
                         Text(
                             text = "TRADE METRICS",
                             fontFamily = FontFamily.Monospace,
-                            fontSize = 9.sp,
+                            fontSize = EmotionalMetrics.TextFloor,
                             fontWeight = FontWeight.Bold,
                             color = EmotionalThemeColors.Primary,
                             letterSpacing = 1.6.sp
@@ -508,9 +262,9 @@ fun Windows11WidgetPanel(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "DESK OVERLAY",
-                                fontSize = 8.sp,
+                                fontSize = EmotionalMetrics.TextFloor,
                                 fontWeight = FontWeight.Medium,
-                                color = Color.White.copy(alpha = 0.42f),
+                                color = EmotionalThemeColors.TextMuted,
                                 letterSpacing = 0.8.sp
                             )
                             Spacer(Modifier.width(6.dp))
@@ -527,9 +281,9 @@ fun Windows11WidgetPanel(
                             Text(
                                 text = if (desk.lastSyncOk) "LIVE" else "STANDBY",
                                 fontFamily = FontFamily.Monospace,
-                                fontSize = 8.sp,
+                                fontSize = EmotionalMetrics.TextFloor,
                                 fontWeight = FontWeight.Bold,
-                                color = if (desk.lastSyncOk) EmotionalThemeColors.Positive else Color.White.copy(alpha = 0.35f),
+                                color = if (desk.lastSyncOk) EmotionalThemeColors.Positive else EmotionalThemeColors.TextHint,
                                 letterSpacing = 0.6.sp
                             )
                         }
@@ -537,30 +291,24 @@ fun Windows11WidgetPanel(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onMinimizeToTaskbar, modifier = Modifier.size(22.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Minimize to Taskbar",
-                            tint = Color.White.copy(alpha = 0.4f),
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                    IconButton(onClick = onCollapseToBubble, modifier = Modifier.size(22.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Minimize,
-                            contentDescription = "Minimize to Bubble",
-                            tint = Color.White.copy(alpha = 0.55f),
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                    IconButton(onClick = onCloseClick, modifier = Modifier.size(22.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Stop Service",
-                            tint = Color.White.copy(alpha = 0.55f),
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
+                    ChromeIconButton(
+                        onClick = onMinimizeToTaskbar,
+                        tooltip = "Minimize to taskbar",
+                        icon = Icons.Default.Remove,
+                        tint = Color.White.copy(alpha = 0.45f)
+                    )
+                    ChromeIconButton(
+                        onClick = onCollapseToBubble,
+                        tooltip = "Collapse to bubble",
+                        icon = Icons.Default.Minimize,
+                        tint = Color.White.copy(alpha = 0.55f)
+                    )
+                    ChromeIconButton(
+                        onClick = onCloseClick,
+                        tooltip = "Close overlay",
+                        icon = Icons.Default.Close,
+                        tint = Color.White.copy(alpha = 0.55f)
+                    )
                 }
             }
 
@@ -577,87 +325,55 @@ fun Windows11WidgetPanel(
 
             Text(
                 text = "READINESS",
-                fontSize = 8.sp,
+                fontSize = EmotionalMetrics.TextFloor,
                 fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.32f),
+                color = EmotionalThemeColors.TextEyebrow,
                 letterSpacing = 1.4.sp,
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier.padding(bottom = 4.dp)
             )
 
-            // 2. Monitoring Metrics Glass Card (rim-lit, inner-radius = 12 - 10 = 2dp for inner elements)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(EmotionalThemeColors.GlassFill)
-                    .drawBehind {
-                        // Rim-light: bright top edge simulates overhead lighting on glass
-                        drawLine(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    EmotionalThemeColors.GlassRimTop,
-                                    EmotionalThemeColors.GlassRimTop,
-                                    Color.Transparent
-                                )
-                            ),
-                            start = Offset(16f, 0f),
-                            end = Offset(size.width - 16f, 0f),
-                            strokeWidth = 1.dp.toPx()
-                        )
-                    }
-                    .border(1.dp, EmotionalThemeColors.GlassBorder, RoundedCornerShape(12.dp))
-                    .padding(10.dp)
-            ) {
-                Column {
-                    MotherSlider(
-                        label = "CONFIDENCE",
-                        value = state.confidence,
-                        onValueChange = { onStateChanged(StateEngine.updateConfidence(state, it)) },
-                        range = 1f..10f,
-                        accentColor = Color(0xFF60A5FA)
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    MotherSlider(
-                        label = "FOCUS",
-                        value = state.focus,
-                        onValueChange = { onStateChanged(StateEngine.updateFocus(state, it)) },
-                        range = 1f..10f,
-                        accentColor = Color(0xFFC084FC) // Lavender
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    MotherSlider(
-                        label = "PROBABILITY",
-                        value = state.probability,
-                        onValueChange = { onStateChanged(StateEngine.updateProbability(state, it)) },
-                        range = 0f..100f,
-                        accentColor = Color(0xFFFBBF24) // Warm Honey
-                    )
-                }
+            FlatCard {
+                MotherSlider(
+                    label = "CONFIDENCE",
+                    value = state.confidence,
+                    onValueChange = { onStateChanged(StateEngine.updateConfidence(state, it)) },
+                    range = 1f..10f,
+                    accentColor = EmotionalThemeColors.Primary
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                MotherSlider(
+                    label = "FOCUS",
+                    value = state.focus,
+                    onValueChange = { onStateChanged(StateEngine.updateFocus(state, it)) },
+                    range = 1f..10f,
+                    accentColor = EmotionalThemeColors.Fomo
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                MotherSlider(
+                    label = "PROBABILITY",
+                    value = state.probability,
+                    onValueChange = { onStateChanged(StateEngine.updateProbability(state, it)) },
+                    range = 0f..100f,
+                    accentColor = EmotionalThemeColors.Ego
+                )
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            // Divider
-            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.1f)))
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(EmotionalThemeColors.Hairline))
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 2. Main horizontal master slider ("ACTIVE")
+            val colorSpec = if (reducedMotion) tween<Color>(0) else tween(durationMillis = 200)
             val animatedActiveColor by animateColorAsState(
                 targetValue = regimeColor,
-                animationSpec = tween(durationMillis = 300),
+                animationSpec = colorSpec,
                 label = "ActiveSliderColor"
             )
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .drawBehind {
-                        drawRoundRect(
-                            color = animatedActiveColor.copy(alpha = 0.08f),
-                            cornerRadius = CornerRadius(8.dp.toPx())
-                        )
-                    }
+                    .border(1.dp, EmotionalThemeColors.Hairline, RoundedCornerShape(EmotionalMetrics.RadiusCard))
                     .padding(horizontal = 8.dp, vertical = 6.dp)
             ) {
                 MotherSlider(
@@ -671,13 +387,17 @@ fun Windows11WidgetPanel(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // 3. Sub-axes toggle button — clean pill style
             Surface(
                 onClick = { onSubAxesToggle(!subAxesExpanded) },
-                shape = RoundedCornerShape(8.dp),
-                color = Color.White.copy(alpha = 0.03f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
-                modifier = Modifier.fillMaxWidth()
+                shape = RoundedCornerShape(EmotionalMetrics.RadiusCard),
+                color = Color.Transparent,
+                border = BorderStroke(1.dp, EmotionalThemeColors.Hairline),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics {
+                        role = Role.Button
+                        stateDescription = if (subAxesExpanded) "Expanded" else "Collapsed"
+                    }
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
@@ -686,31 +406,30 @@ fun Windows11WidgetPanel(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = if (subAxesExpanded) Icons.Default.SettingsApplications else Icons.Default.Tune,
-                            contentDescription = "Sub-profiles toggle",
-                            tint = Color.White.copy(alpha = 0.4f),
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.45f),
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (subAxesExpanded) "Tilt factors" else "Tilt factors",
-                            color = Color.White.copy(alpha = 0.55f),
+                            text = if (subAxesExpanded) "Hide tilt factors" else "Tilt factors",
+                            color = EmotionalThemeColors.TextMuted,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Medium,
                             fontFamily = FontFamily.SansSerif,
                             letterSpacing = 0.4.sp
                         )
                     }
-                    // Animated chevron rotates 180° on expand
                     val chevronRotation by animateFloatAsState(
                         targetValue = if (subAxesExpanded) 180f else 0f,
-                        animationSpec = tween(200, easing = FastOutSlowInEasing),
+                        animationSpec = if (reducedMotion) tween(0) else tween(200, easing = FastOutSlowInEasing),
                         label = "chevron"
                     )
                     Icon(
                         imageVector = Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Expand indicator",
-                        tint = Color.White.copy(alpha = 0.35f),
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.4f),
                         modifier = Modifier
                             .size(16.dp)
                             .graphicsLayer { rotationZ = chevronRotation }
@@ -718,37 +437,19 @@ fun Windows11WidgetPanel(
                 }
             }
 
-            // 4 & 5. Unified glass container — always present, content swaps inside.
-            // Using AnimatedVisibility (not AnimatedContent) so each state correctly
-            // collapses to zero height when hidden — no extra space reserved.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(EmotionalThemeColors.GlassFill)
-                    .drawBehind {
-                        drawLine(
-                            brush = Brush.horizontalGradient(
-                                listOf(
-                                    Color.Transparent,
-                                    EmotionalThemeColors.GlassRimTop,
-                                    EmotionalThemeColors.GlassRimTop,
-                                    Color.Transparent
-                                )
-                            ),
-                            start = Offset(16f, 0f),
-                            end = Offset(size.width - 16f, 0f),
-                            strokeWidth = 1.dp.toPx()
-                        )
-                    }
-                    .border(1.dp, EmotionalThemeColors.GlassBorder, RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(EmotionalMetrics.RadiusCard))
+                    .border(1.dp, EmotionalThemeColors.Hairline, RoundedCornerShape(EmotionalMetrics.RadiusCard))
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    // Collapsed: mini badge row
+                    val enterFade = if (reducedMotion) fadeIn(tween(0)) else fadeIn(tween(180, delayMillis = 80))
+                    val exitFade = if (reducedMotion) fadeOut(tween(0)) else fadeOut(tween(100))
                     AnimatedVisibility(
                         visible = !subAxesExpanded,
-                        enter = fadeIn(tween(180, delayMillis = 80)),
-                        exit = fadeOut(tween(100))
+                        enter = enterFade,
+                        exit = exitFade
                     ) {
                         Row(
                             modifier = Modifier
@@ -756,22 +457,27 @@ fun Windows11WidgetPanel(
                                 .padding(horizontal = 10.dp, vertical = 8.dp),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            ProfileMiniBadge(label = "REV",  value = state.revenge, color = EmotionalThemeColors.Revenge)
-                            ProfileMiniBadge(label = "FOMO", value = state.fomo,    color = EmotionalThemeColors.Fomo)
+                            ProfileMiniBadge(label = "REV", value = state.revenge, color = EmotionalThemeColors.Revenge)
+                            ProfileMiniBadge(label = "FOMO", value = state.fomo, color = EmotionalThemeColors.Fomo)
                             ProfileMiniBadge(label = "DRIFT", value = state.mistake, color = EmotionalThemeColors.Mistake)
-                            ProfileMiniBadge(label = "EGO",  value = state.ego,     color = EmotionalThemeColors.Ego)
+                            ProfileMiniBadge(label = "EGO", value = state.ego, color = EmotionalThemeColors.Ego)
                         }
                     }
 
-                    // Expanded: full child sliders
                     AnimatedVisibility(
                         visible = subAxesExpanded,
-                        enter = fadeIn(tween(180, delayMillis = 80)) +
-                            expandVertically(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)),
-                        exit = fadeOut(tween(100)) +
-                            shrinkVertically(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow))
+                        enter = if (reducedMotion) enterFade else enterFade + expandVertically(
+                            spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
+                        ),
+                        exit = if (reducedMotion) exitFade else exitFade + shrinkVertically(
+                            spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
+                        )
                     ) {
-                        Column(modifier = Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 4.dp)) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 4.dp)
+                        ) {
                             ChildSlider(
                                 label = "REVENGE",
                                 value = state.revenge,
@@ -805,16 +511,62 @@ fun Windows11WidgetPanel(
             }
 
             Spacer(modifier = Modifier.height(4.dp))
-            
-            // ── Copyright Watermark ──
+
             Text(
                 "Trade Metrics  ·  session overlay  ·  2026",
-                fontSize = 8.sp,
-                color = Color.White.copy(alpha = 0.18f),
+                fontSize = EmotionalMetrics.TextFloor,
+                color = EmotionalThemeColors.TextHint,
                 fontFamily = FontFamily.Monospace,
                 textAlign = TextAlign.Center,
                 letterSpacing = 0.4.sp,
                 modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun FlatCard(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(EmotionalMetrics.RadiusCard))
+            .border(1.dp, EmotionalThemeColors.Hairline, RoundedCornerShape(EmotionalMetrics.RadiusCard))
+            .padding(10.dp),
+        content = content
+    )
+}
+
+@Composable
+private fun ChromeIconButton(
+    onClick: () -> Unit,
+    tooltip: String,
+    icon: ImageVector,
+    tint: Color
+) {
+    val tooltipState = rememberTooltipState()
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        tooltip = {
+            PlainTooltip(
+                containerColor = EmotionalThemeColors.PanelFill,
+                contentColor = Color.White.copy(alpha = 0.88f)
+            ) {
+                Text(
+                    tooltip,
+                    fontSize = EmotionalMetrics.TextFloor,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        },
+        state = tooltipState
+    ) {
+        IconButton(onClick = onClick, modifier = Modifier.size(22.dp)) {
+            Icon(
+                imageVector = icon,
+                contentDescription = tooltip,
+                tint = tint,
+                modifier = Modifier.size(14.dp)
             )
         }
     }
@@ -847,34 +599,55 @@ private fun DeskTelemetryBar(
     regimeLabel: String,
     regimeColor: Color
 ) {
-    val pnlColor = when {
-        desk.todayPnl > 0 -> EmotionalThemeColors.Positive
-        desk.todayPnl < 0 -> EmotionalThemeColors.Negative
-        else -> Color.White.copy(alpha = 0.75f)
+    val awaiting = !desk.lastSyncOk
+    val pnl = formatDeskPnl(desk.todayPnl, desk.currencySymbol, desk.zenMode)
+    val dash = "—"
+    val wrText = when {
+        awaiting -> dash
+        desk.closedToday == 0 -> dash
+        else -> String.format(Locale.US, "%.0f%%", desk.winRateToday)
     }
-    val pnlText = when {
-        desk.zenMode -> "${desk.currencySymbol} ***"
-        desk.todayPnl > 0 -> "${desk.currencySymbol}${String.format("%,.2f", desk.todayPnl)}"
-        desk.todayPnl < 0 -> "-${desk.currencySymbol}${String.format("%,.2f", kotlin.math.abs(desk.todayPnl))}"
-        else -> "${desk.currencySymbol}${String.format("%,.2f", 0.0)}"
-    }
-    val wrText = if (desk.closedToday == 0) "—" else String.format("%.0f%%", desk.winRateToday)
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(EmotionalThemeColors.GlassFill)
-                .border(1.dp, EmotionalThemeColors.Hairline, RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(EmotionalMetrics.RadiusCard))
+                .border(1.dp, EmotionalThemeColors.Hairline, RoundedCornerShape(EmotionalMetrics.RadiusCard))
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(Modifier.weight(1.15f)) { TelemetryCell(label = "SESSION", value = clockText.ifBlank { "--:--:--" }, valueColor = Color.White.copy(alpha = 0.8f)) }
-            Box(Modifier.weight(1.45f)) { TelemetryCell(label = "TODAY P&L", value = pnlText, valueColor = pnlColor) }
-            Box(Modifier.weight(0.7f)) { TelemetryCell(label = "OPEN", value = desk.openCount.toString(), valueColor = Color.White.copy(alpha = 0.85f)) }
-            Box(Modifier.weight(0.8f)) { TelemetryCell(label = "CLOSED", value = desk.closedToday.toString(), valueColor = Color.White.copy(alpha = 0.85f)) }
-            Box(Modifier.weight(0.65f)) { TelemetryCell(label = "WR", value = wrText, valueColor = Color.White.copy(alpha = 0.85f)) }
+            Box(Modifier.weight(1.15f)) {
+                TelemetryCell(
+                    label = "SESSION",
+                    value = clockText.ifBlank { "--:--:--" },
+                    valueColor = Color.White.copy(alpha = 0.82f)
+                )
+            }
+            Box(Modifier.weight(1.55f)) {
+                TelemetryCell(
+                    label = "TODAY P&L",
+                    value = if (awaiting) dash else pnl.text,
+                    valueColor = if (awaiting) EmotionalThemeColors.PnlFlat else pnl.color
+                )
+            }
+            Box(Modifier.weight(0.65f)) {
+                TelemetryCell(
+                    label = "OPEN",
+                    value = if (awaiting) dash else desk.openCount.toString(),
+                    valueColor = Color.White.copy(alpha = 0.85f)
+                )
+            }
+            Box(Modifier.weight(0.75f)) {
+                TelemetryCell(
+                    label = "CLOSED",
+                    value = if (awaiting) dash else desk.closedToday.toString(),
+                    valueColor = Color.White.copy(alpha = 0.85f)
+                )
+            }
+            Box(Modifier.weight(0.6f)) {
+                TelemetryCell(label = "WR", value = wrText, valueColor = Color.White.copy(alpha = 0.85f))
+            }
         }
         Spacer(Modifier.height(6.dp))
         Row(
@@ -885,15 +658,15 @@ private fun DeskTelemetryBar(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
+                        .clip(RoundedCornerShape(EmotionalMetrics.RadiusControl))
                         .background(regimeColor.copy(alpha = 0.12f))
-                        .border(1.dp, regimeColor.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
+                        .border(1.dp, regimeColor.copy(alpha = 0.35f), RoundedCornerShape(EmotionalMetrics.RadiusControl))
                         .padding(horizontal = 8.dp, vertical = 3.dp)
                 ) {
                     Text(
                         text = regimeLabel,
                         fontFamily = FontFamily.Monospace,
-                        fontSize = 9.sp,
+                        fontSize = EmotionalMetrics.TextFloor,
                         fontWeight = FontWeight.Bold,
                         color = regimeColor,
                         letterSpacing = 1.2.sp
@@ -903,20 +676,20 @@ private fun DeskTelemetryBar(
                     Spacer(Modifier.width(6.dp))
                     Text(
                         text = "${desk.watchCount} watch",
-                        fontSize = 9.sp,
-                        color = Color.White.copy(alpha = 0.38f),
+                        fontSize = EmotionalMetrics.TextFloor,
+                        color = EmotionalThemeColors.TextHint,
                         fontFamily = FontFamily.Monospace
                     )
                 }
             }
             val limit = desk.dailyLossLimit
-            if (limit != null && limit > 0) {
+            if (!awaiting && limit != null && limit > 0) {
                 val used = (kotlin.math.abs(desk.todayPnl.coerceAtMost(0.0)) / limit).toFloat().coerceIn(0f, 1f)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = "LOSS LIMIT",
-                        fontSize = 8.sp,
-                        color = Color.White.copy(alpha = 0.35f),
+                        fontSize = EmotionalMetrics.TextFloor,
+                        color = EmotionalThemeColors.TextEyebrow,
                         letterSpacing = 0.6.sp,
                         fontFamily = FontFamily.Monospace
                     )
@@ -932,7 +705,9 @@ private fun DeskTelemetryBar(
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .fillMaxWidth(used)
-                                .background(if (used > 0.7f) EmotionalThemeColors.Negative else EmotionalThemeColors.Ego)
+                                .background(
+                                    if (used > 0.7f) EmotionalThemeColors.Danger else EmotionalThemeColors.Warning
+                                )
                         )
                     }
                 }
@@ -946,9 +721,9 @@ private fun TelemetryCell(label: String, value: String, valueColor: Color) {
     Column(horizontalAlignment = Alignment.Start) {
         Text(
             text = label,
-            fontSize = 7.sp,
+            fontSize = EmotionalMetrics.TextFloor,
             fontWeight = FontWeight.Bold,
-            color = Color.White.copy(alpha = 0.32f),
+            color = EmotionalThemeColors.TextEyebrow,
             letterSpacing = 0.7.sp,
             fontFamily = FontFamily.Monospace
         )
@@ -959,6 +734,7 @@ private fun TelemetryCell(label: String, value: String, valueColor: Color) {
             fontWeight = FontWeight.Bold,
             color = valueColor,
             fontFamily = FontFamily.Monospace,
+            style = TextStyle(fontFeatureSettings = "tnum"),
             maxLines = 1
         )
     }
@@ -966,26 +742,32 @@ private fun TelemetryCell(label: String, value: String, valueColor: Color) {
 
 @Composable
 private fun CooldownBanner(untilMs: Long?) {
-    val remaining = ((untilMs ?: 0L) - System.currentTimeMillis()).coerceAtLeast(0L)
+    var remaining by remember(untilMs) { mutableStateOf(0L) }
+    LaunchedEffect(untilMs) {
+        while (true) {
+            remaining = ((untilMs ?: 0L) - System.currentTimeMillis()).coerceAtLeast(0L)
+            delay(250L)
+        }
+    }
     val h = remaining / 3_600_000
     val m = (remaining % 3_600_000) / 60_000
     val s = (remaining % 60_000) / 1000
-    val clock = if (h > 0) String.format("%02d:%02d:%02d", h, m, s) else String.format("%02d:%02d", m, s)
+    val clock = if (h > 0) String.format(Locale.US, "%02d:%02d:%02d", h, m, s) else String.format(Locale.US, "%02d:%02d", m, s)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(EmotionalThemeColors.Negative.copy(alpha = 0.12f))
-            .border(1.dp, EmotionalThemeColors.Negative.copy(alpha = 0.28f), RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(EmotionalMetrics.RadiusCard))
+            .background(EmotionalThemeColors.Danger.copy(alpha = 0.12f))
+            .border(1.dp, EmotionalThemeColors.Danger.copy(alpha = 0.28f), RoundedCornerShape(EmotionalMetrics.RadiusCard))
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
             text = "COOLDOWN",
-            fontSize = 9.sp,
+            fontSize = EmotionalMetrics.TextFloor,
             fontWeight = FontWeight.Bold,
-            color = EmotionalThemeColors.Negative,
+            color = EmotionalThemeColors.Danger,
             letterSpacing = 1.1.sp,
             fontFamily = FontFamily.Monospace
         )
@@ -993,13 +775,13 @@ private fun CooldownBanner(untilMs: Long?) {
             text = clock,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
-            color = EmotionalThemeColors.Negative,
-            fontFamily = FontFamily.Monospace
+            color = EmotionalThemeColors.Danger,
+            fontFamily = FontFamily.Monospace,
+            style = TextStyle(fontFeatureSettings = "tnum")
         )
     }
 }
 
-// Mini badge helper for collapsed profiling view
 @Composable
 fun ProfileMiniBadge(
     label: String,
@@ -1009,31 +791,31 @@ fun ProfileMiniBadge(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(color.copy(alpha = 0.05f))
-            .border(1.dp, color.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(EmotionalMetrics.RadiusControl))
+            .border(1.dp, color.copy(alpha = 0.22f), RoundedCornerShape(EmotionalMetrics.RadiusControl))
             .padding(horizontal = 6.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = label,
-                fontSize = 8.sp,
+                fontSize = EmotionalMetrics.TextFloor,
                 fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.4f),
+                color = EmotionalThemeColors.TextEyebrow,
                 letterSpacing = 0.5.sp
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = String.format("%.1f", value),
+                text = String.format(Locale.US, "%.1f", value),
                 fontSize = 11.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = color
+                fontWeight = FontWeight.Bold,
+                color = color,
+                fontFamily = FontFamily.Monospace,
+                style = TextStyle(fontFeatureSettings = "tnum")
             )
         }
     }
 }
-
 
 @Composable
 fun MotherSlider(
@@ -1044,53 +826,48 @@ fun MotherSlider(
     accentColor: Color
 ) {
     var dragValue by remember(value) { mutableStateOf(value) }
+    val reducedMotion = rememberPrefersReducedMotion()
+    val valueText = if (range.endInclusive == 100f) "${dragValue.toInt()}%" else String.format(Locale.US, "%.1f", dragValue)
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Inter for labels — premium, readable sans-serif
             Text(
                 text = label,
                 fontFamily = FontFamily.SansSerif,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White.copy(alpha = 0.75f),
+                color = Color.White.copy(alpha = 0.78f),
                 letterSpacing = 0.8.sp
             )
-            // JetBrains Mono for values — monospaced, no jitter
-            AnimatedContent(
-                targetState = if (range.endInclusive == 100f) "${dragValue.toInt()}%" else String.format("%.1f", dragValue),
-                transitionSpec = {
-                    (slideInVertically { height -> height } + fadeIn(animationSpec = tween(120)))
-                        .togetherWith(slideOutVertically { height -> -height } + fadeOut(animationSpec = tween(80)))
+            if (reducedMotion) {
+                MetricValue(valueText, accentColor, 14.sp)
+            } else {
+                AnimatedContent(
+                    targetState = valueText,
+                    transitionSpec = {
+                        (slideInVertically { height -> height } + fadeIn(animationSpec = tween(120)))
+                            .togetherWith(slideOutVertically { height -> -height } + fadeOut(animationSpec = tween(80)))
+                    }
+                ) { targetText ->
+                    MetricValue(targetText, accentColor, 14.sp)
                 }
-            ) { targetText ->
-                Text(
-                    text = targetText,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = accentColor,
-                    style = androidx.compose.ui.text.TextStyle(
-                        fontFeatureSettings = "tnum"
-                    )
-                )
             }
         }
         Spacer(modifier = Modifier.height(1.dp))
-        androidx.compose.material3.Slider(
+        Slider(
             value = dragValue,
             onValueChange = { dragValue = it },
             onValueChangeFinished = { onValueChange(dragValue) },
             valueRange = range,
-            colors = androidx.compose.material3.SliderDefaults.colors(
+            colors = SliderDefaults.colors(
                 thumbColor = accentColor,
                 activeTrackColor = accentColor,
-                inactiveTrackColor = accentColor.copy(alpha = 0.18f)
+                inactiveTrackColor = Color.White.copy(alpha = 0.12f)
             ),
-            modifier = Modifier.height(22.dp)
+            modifier = Modifier.height(20.dp)
         )
     }
 }
@@ -1103,6 +880,8 @@ fun ChildSlider(
     accentColor: Color
 ) {
     var dragValue by remember(value) { mutableStateOf(value) }
+    val reducedMotion = rememberPrefersReducedMotion()
+    val valueText = String.format(Locale.US, "%.1f", dragValue)
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1112,53 +891,58 @@ fun ChildSlider(
             Text(
                 text = label,
                 fontFamily = FontFamily.SansSerif,
-                fontSize = 9.sp,
+                fontSize = EmotionalMetrics.TextFloor,
                 fontWeight = FontWeight.Medium,
-                color = Color.White.copy(alpha = 0.6f),
+                color = Color.White.copy(alpha = 0.62f),
                 letterSpacing = 0.6.sp
             )
-            AnimatedContent(
-                targetState = String.format("%.1f", dragValue),
-                transitionSpec = {
-                    (slideInVertically { height -> height } + fadeIn(animationSpec = tween(120)))
-                        .togetherWith(slideOutVertically { height -> -height } + fadeOut(animationSpec = tween(80)))
+            if (reducedMotion) {
+                MetricValue(valueText, accentColor, 12.sp)
+            } else {
+                AnimatedContent(
+                    targetState = valueText,
+                    transitionSpec = {
+                        (slideInVertically { height -> height } + fadeIn(animationSpec = tween(120)))
+                            .togetherWith(slideOutVertically { height -> -height } + fadeOut(animationSpec = tween(80)))
+                    }
+                ) { targetText ->
+                    MetricValue(targetText, accentColor, 12.sp)
                 }
-            ) { targetText ->
-                Text(
-                    text = targetText,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = accentColor,
-                    style = androidx.compose.ui.text.TextStyle(
-                        fontFeatureSettings = "tnum"
-                    )
-                )
             }
         }
         Spacer(modifier = Modifier.height(4.dp))
-        // Clip the Material3 Slider's invisible bottom touch-target padding
-        // that would otherwise create a gap below the last slider in the card.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(24.dp)
-                .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                .height(22.dp)
+                .clip(RoundedCornerShape(4.dp))
         ) {
-            androidx.compose.material3.Slider(
+            Slider(
                 value = dragValue,
                 onValueChange = { dragValue = it },
                 onValueChangeFinished = { onValueChange(dragValue) },
                 valueRange = 1f..10f,
-                colors = androidx.compose.material3.SliderDefaults.colors(
+                colors = SliderDefaults.colors(
                     thumbColor = accentColor,
                     activeTrackColor = accentColor,
-                    inactiveTrackColor = accentColor.copy(alpha = 0.15f)
+                    inactiveTrackColor = Color.White.copy(alpha = 0.12f)
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .offset(y = (-1).dp) // slight shift so it's not clipped at top
+                    .offset(y = (-1).dp)
             )
         }
     }
+}
+
+@Composable
+private fun MetricValue(text: String, color: Color, size: androidx.compose.ui.unit.TextUnit) {
+    Text(
+        text = text,
+        fontFamily = FontFamily.Monospace,
+        fontSize = size,
+        fontWeight = FontWeight.Bold,
+        color = color,
+        style = TextStyle(fontFeatureSettings = "tnum")
+    )
 }
